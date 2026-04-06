@@ -1,0 +1,770 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Invoice Comparator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:       #080c18;
+  --surface:  #0f1525;
+  --surface2: #151d2e;
+  --border:   #1e2d47;
+  --border2:  #2a3d5c;
+  --blue:     #4a8fff;
+  --blue2:    #2d6bcc;
+  --green:    #22c55e;
+  --yellow:   #f59e0b;
+  --red:      #ef4444;
+  --orange:   #f97316;
+  --text:     #e8edf5;
+  --muted:    #6b7fa3;
+  --muted2:   #3a4d6b;
+  --mono:     'IBM Plex Mono', monospace;
+  --sans:     'DM Sans', sans-serif;
+}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14px;line-height:1.6}
+a{color:var(--blue)}
+
+/* Layout */
+.app{min-height:100vh;display:flex;flex-direction:column}
+.header{padding:20px 32px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:16px;background:var(--surface)}
+.logo{display:flex;align-items:center;gap:10px}
+.logo-mark{width:32px;height:32px;background:var(--blue);border-radius:7px;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:14px;font-weight:600;color:#fff;flex-shrink:0}
+.logo-text{font-family:var(--mono);font-size:15px;font-weight:600;letter-spacing:-.3px}
+.logo-sub{font-size:11px;color:var(--muted);margin-left:auto;font-family:var(--mono);letter-spacing:.5px}
+.main{flex:1;padding:32px;max-width:960px;margin:0 auto;width:100%}
+
+/* Upload zone */
+.upload-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px}
+.upload-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;transition:border-color .2s}
+.upload-card.dragover{border-color:var(--blue);background:rgba(74,143,255,.06)}
+.upload-card.loaded{border-color:var(--green)}
+.upload-label{font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);font-family:var(--mono);margin-bottom:12px;display:flex;align-items:center;gap:6px}
+.upload-label .dot{width:6px;height:6px;border-radius:50%;background:var(--muted2)}
+.upload-label.loaded .dot{background:var(--green)}
+.dropzone{border:1.5px dashed var(--border2);border-radius:8px;padding:28px 20px;text-align:center;cursor:pointer;transition:all .2s;position:relative}
+.dropzone:hover{border-color:var(--blue);background:rgba(74,143,255,.04)}
+.dropzone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer}
+.dz-icon{font-size:28px;margin-bottom:8px;opacity:.5}
+.dz-text{color:var(--muted);font-size:12px}
+.dz-text strong{color:var(--text);font-weight:500}
+.file-info{display:none;align-items:center;gap:10px;padding:10px 12px;background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.25);border-radius:8px;margin-top:12px}
+.file-info.show{display:flex}
+.file-icon{font-size:18px}
+.file-name{font-size:12px;color:var(--green);font-family:var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.file-clear{background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;padding:2px;line-height:1;flex-shrink:0}
+.file-clear:hover{color:var(--red)}
+
+/* Sheet picker */
+.sheet-picker{display:none;margin-top:12px;padding:12px;background:rgba(74,143,255,.06);border:1px solid rgba(74,143,255,.2);border-radius:8px}
+.sheet-picker.show{display:block}
+.sheet-picker label{font-size:11px;color:var(--muted);font-family:var(--mono);letter-spacing:.5px;display:block;margin-bottom:6px}
+.sheet-picker select{width:100%;background:var(--surface2);border:1px solid var(--border2);border-radius:6px;color:var(--text);padding:8px 10px;font-size:12px;font-family:var(--mono);appearance:none;cursor:pointer}
+.sheet-notice{font-size:11px;color:var(--blue);margin-top:6px}
+
+/* Run button */
+.run-row{display:flex;align-items:center;gap:16px;margin-bottom:28px}
+.btn-run{background:var(--blue);color:#fff;border:none;border-radius:8px;padding:13px 28px;font-size:14px;font-weight:600;font-family:var(--sans);cursor:pointer;transition:background .15s,transform .1s;letter-spacing:.2px}
+.btn-run:hover:not(:disabled){background:var(--blue2)}
+.btn-run:active:not(:disabled){transform:scale(.98)}
+.btn-run:disabled{opacity:.4;cursor:not-allowed}
+.run-hint{font-size:12px;color:var(--muted)}
+
+/* Progress */
+.progress-bar{height:3px;background:var(--border);border-radius:3px;overflow:hidden;margin-bottom:28px;display:none}
+.progress-bar.show{display:block}
+.progress-fill{height:100%;background:var(--blue);border-radius:3px;width:0%;transition:width .4s ease}
+
+/* Results summary */
+.results{display:none}
+.results.show{display:block}
+.result-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
+.result-title{font-family:var(--mono);font-size:14px;font-weight:600;color:var(--text)}
+.result-meta{font-size:11px;color:var(--muted);font-family:var(--mono)}
+.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px}
+.stat{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px}
+.stat-num{font-family:var(--mono);font-size:26px;font-weight:600;margin-bottom:2px}
+.stat-label{font-size:11px;color:var(--muted);letter-spacing:.3px}
+.stat.match .stat-num{color:var(--green)}
+.stat.mismatch .stat-num{color:var(--yellow)}
+.stat.miss-v .stat-num{color:var(--orange)}
+.stat.miss-ar .stat-num{color:var(--red)}
+
+/* Missing invoices preview */
+.section{background:var(--surface);border:1px solid var(--border);border-radius:10px;margin-bottom:16px;overflow:hidden}
+.section-head{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.section-title{font-size:12px;font-family:var(--mono);font-weight:600;letter-spacing:.5px;text-transform:uppercase}
+.section-count{font-family:var(--mono);font-size:11px;padding:2px 8px;border-radius:4px}
+.tbl-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:12px}
+thead th{text-align:left;padding:10px 14px;font-family:var(--mono);font-size:10px;letter-spacing:.8px;color:var(--muted);border-bottom:1px solid var(--border);white-space:nowrap;font-weight:500}
+tbody td{padding:9px 14px;border-bottom:1px solid var(--border);font-family:var(--mono);color:var(--text)}
+tbody tr:last-child td{border-bottom:none}
+tbody tr:hover{background:rgba(255,255,255,.02)}
+.tag{display:inline-block;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:600;letter-spacing:.3px}
+.tag-match{background:rgba(34,197,94,.15);color:var(--green)}
+.tag-mismatch{background:rgba(245,158,11,.15);color:var(--yellow)}
+.tag-mv{background:rgba(249,115,22,.15);color:var(--orange)}
+.tag-ar{background:rgba(239,68,68,.15);color:var(--red)}
+.amt{text-align:right}
+.amt-pos{color:var(--green)}
+.amt-neg{color:var(--red)}
+.amt-zero{color:var(--muted2)}
+
+/* Download button */
+.dl-row{display:flex;gap:12px;margin-top:20px}
+.btn-dl{display:inline-flex;align-items:center;gap:8px;background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.3);color:var(--green);border-radius:8px;padding:11px 20px;font-size:13px;font-weight:600;font-family:var(--sans);cursor:pointer;transition:all .15s}
+.btn-dl:hover{background:rgba(34,197,94,.2);border-color:rgba(34,197,94,.5)}
+.btn-new{display:inline-flex;align-items:center;gap:8px;background:var(--surface2);border:1px solid var(--border2);color:var(--muted);border-radius:8px;padding:11px 20px;font-size:13px;font-weight:600;font-family:var(--sans);cursor:pointer;transition:all .15s}
+.btn-new:hover{border-color:var(--border);color:var(--text)}
+
+/* Error */
+.error-box{background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.25);border-radius:8px;padding:14px 18px;font-size:12px;color:#fca5a5;font-family:var(--mono);margin-bottom:16px;display:none}
+.error-box.show{display:block}
+
+/* Footer */
+.footer{padding:16px 32px;border-top:1px solid var(--border);font-size:11px;color:var(--muted);font-family:var(--mono);display:flex;align-items:center;justify-content:space-between}
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- Header -->
+<header class="header">
+  <div class="logo">
+    <div class="logo-mark">IC</div>
+    <div class="logo-text">Invoice Comparator</div>
+  </div>
+  <span class="logo-sub">COMMISSION RECONCILIATION TOOL</span>
+</header>
+
+<!-- Main -->
+<main class="main">
+
+  <!-- Error -->
+  <div class="error-box" id="errorBox"></div>
+
+  <!-- Upload section -->
+  <div id="uploadSection">
+    <div class="upload-grid">
+
+      <!-- Commission Source Report -->
+      <div class="upload-card" id="card-our">
+        <div class="upload-label" id="label-our">
+          <span class="dot"></span>
+          Commission Source Report
+        </div>
+        <div class="dropzone" id="dz-our" ondragover="doDragOver(event,'our')" ondragleave="doDragLeave('our')" ondrop="doDrop(event,'our')">
+          <input type="file" accept=".xlsx,.xls" onchange="handleFile(event,'our')">
+          <div class="dz-icon">📊</div>
+          <div class="dz-text"><strong>Drop file here</strong> or click to browse</div>
+          <div class="dz-text" style="margin-top:4px;font-size:11px">Multi-tab Excel · WE MM-DD-YY sheets</div>
+        </div>
+        <div class="file-info" id="fi-our">
+          <span class="file-icon">✓</span>
+          <span class="file-name" id="fn-our"></span>
+          <button class="file-clear" onclick="clearFile('our')">✕</button>
+        </div>
+        <div class="sheet-picker" id="sp-our">
+          <label>SELECT WEEK TAB</label>
+          <select id="sheet-select" onchange="onSheetPick()"></select>
+          <div class="sheet-notice" id="sheet-notice"></div>
+        </div>
+      </div>
+
+      <!-- Vendor Invoice -->
+      <div class="upload-card" id="card-vendor">
+        <div class="upload-label" id="label-vendor">
+          <span class="dot"></span>
+          Vendor Invoice
+        </div>
+        <div class="dropzone" id="dz-vendor" ondragover="doDragOver(event,'vendor')" ondragleave="doDragLeave('vendor')" ondrop="doDrop(event,'vendor')">
+          <input type="file" accept=".xlsx,.xls" onchange="handleFile(event,'vendor')">
+          <div class="dz-icon">🧾</div>
+          <div class="dz-text"><strong>Drop file here</strong> or click to browse</div>
+          <div class="dz-text" style="margin-top:4px;font-size:11px">Auto-detects format · any vendor layout</div>
+        </div>
+        <div class="file-info" id="fi-vendor">
+          <span class="file-icon">✓</span>
+          <span class="file-name" id="fn-vendor"></span>
+          <button class="file-clear" onclick="clearFile('vendor')">✕</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Run -->
+    <div class="run-row">
+      <button class="btn-run" id="btnRun" onclick="runComparison()" disabled>Run Comparison</button>
+      <span class="run-hint" id="runHint">Upload both files to continue</span>
+    </div>
+    <div class="progress-bar" id="progressBar"><div class="progress-fill" id="progressFill"></div></div>
+  </div>
+
+  <!-- Results -->
+  <div class="results" id="resultsSection">
+
+    <div class="result-header">
+      <div>
+        <div class="result-title" id="resultTitle">Comparison Complete</div>
+        <div class="result-meta" id="resultMeta"></div>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stat-grid">
+      <div class="stat match"><div class="stat-num" id="s-match">0</div><div class="stat-label">Matched</div></div>
+      <div class="stat mismatch"><div class="stat-num" id="s-mismatch">0</div><div class="stat-label">Mismatches</div></div>
+      <div class="stat miss-v"><div class="stat-num" id="s-mv">0</div><div class="stat-label">Missing from Vendor</div></div>
+      <div class="stat miss-ar"><div class="stat-num" id="s-ar">0</div><div class="stat-label">Missing from Our Records</div></div>
+    </div>
+
+    <!-- Missing invoices preview -->
+    <div class="section" id="sec-mv" style="display:none">
+      <div class="section-head">
+        <span class="section-title" style="color:var(--orange)">Missing from Vendor Invoice</span>
+        <span class="section-count" id="cnt-mv" style="background:rgba(249,115,22,.15);color:var(--orange)"></span>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Invoice</th><th class="amt">Net (Our Records)</th><th>Note</th></tr></thead>
+          <tbody id="tbl-mv"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="section" id="sec-ar" style="display:none">
+      <div class="section-head">
+        <span class="section-title" style="color:var(--red)">Missing from Our Records</span>
+        <span class="section-count" id="cnt-ar" style="background:rgba(239,68,68,.15);color:var(--red)"></span>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Invoice</th><th class="amt">Net (Vendor)</th><th>Note</th></tr></thead>
+          <tbody id="tbl-ar"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="section" id="sec-mm" style="display:none">
+      <div class="section-head">
+        <span class="section-title" style="color:var(--yellow)">Mismatches</span>
+        <span class="section-count" id="cnt-mm" style="background:rgba(245,158,11,.15);color:var(--yellow)"></span>
+      </div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr>
+            <th>Invoice</th>
+            <th class="amt">Sales (Ours)</th><th class="amt">Sales (Vendor)</th>
+            <th class="amt">Returns (Ours)</th><th class="amt">Returns (Vendor)</th>
+            <th class="amt">Net (Ours)</th><th class="amt">Net (Vendor)</th>
+            <th class="amt">Diff</th>
+          </tr></thead>
+          <tbody id="tbl-mm"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Download -->
+    <div class="dl-row">
+      <button class="btn-dl" id="btnDl" onclick="downloadExcel()">⬇ Download Excel Report</button>
+      <button class="btn-new" onclick="resetApp()">↺ New Comparison</button>
+    </div>
+
+  </div>
+</main>
+
+<footer class="footer">
+  <span>Invoice Comparator · 100% browser-based · no data leaves your device</span>
+  <span id="footer-date"></span>
+</footer>
+</div>
+
+<!-- SheetJS -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+<script>
+// State
+const state = {
+  ourWB: null, ourFileName: '', ourSheets: [], ourSheet: '',
+  vendorWB: null, vendorFileName: '',
+  results: null
+};
+
+const INVALID_INV = new Set(['0','-','NAN','','NONE','N/A','NA','#N/A','NaN']);
+const TOLERANCE   = 0.02;
+
+document.getElementById('footer-date').textContent =
+  new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
+
+// File handling
+function doDragOver(e, side) { e.preventDefault(); document.getElementById('dz-'+side).classList.add('dragover'); }
+function doDragLeave(side)  { document.getElementById('dz-'+side).classList.remove('dragover'); }
+function doDrop(e, side)    { e.preventDefault(); doDragLeave(side); const f=e.dataTransfer.files[0]; if(f) loadFile(f, side); }
+function handleFile(e, side){ const f=e.target.files[0]; if(f) loadFile(f, side); }
+
+function loadFile(file, side) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const wb = XLSX.read(new Uint8Array(e.target.result), {type:'array', cellDates:true});
+      if (side === 'our') {
+        state.ourWB = wb;
+        state.ourFileName = file.name;
+        state.ourSheets = wb.SheetNames;
+        showFileInfo('our', file.name);
+        tryAutoSheet();
+      } else {
+        state.vendorWB = wb;
+        state.vendorFileName = file.name;
+        showFileInfo('vendor', file.name);
+        if (state.ourWB) tryAutoSheet();
+      }
+      checkReady();
+    } catch(err) {
+      showError('Could not read ' + file.name + ': ' + err.message);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function showFileInfo(side, name) {
+  document.getElementById('fi-'+side).classList.add('show');
+  document.getElementById('fn-'+side).textContent = name;
+  document.getElementById('label-'+side).classList.add('loaded');
+  document.getElementById('dz-'+side).style.display = 'none';
+}
+
+function clearFile(side) {
+  if (side === 'our') {
+    state.ourWB = null; state.ourFileName = ''; state.ourSheets = []; state.ourSheet = '';
+    document.getElementById('sp-our').classList.remove('show');
+  } else {
+    state.vendorWB = null; state.vendorFileName = '';
+  }
+  document.getElementById('fi-'+side).classList.remove('show');
+  document.getElementById('label-'+side).classList.remove('loaded');
+  document.getElementById('dz-'+side).style.display = '';
+  checkReady();
+}
+
+// Sheet auto-detection
+function tryAutoSheet() {
+  if (!state.ourWB || !state.ourSheets.length) return;
+  const sp = document.getElementById('sp-our');
+  const sel = document.getElementById('sheet-select');
+  const notice = document.getElementById('sheet-notice');
+  sel.innerHTML = '';
+  state.ourSheets.forEach(n => { const o=document.createElement('option'); o.value=o.textContent=n; sel.appendChild(o); });
+
+  let targetSheet = null;
+  if (state.vendorWB) {
+    const sat = detectVendorSaturday(state.vendorWB);
+    if (sat) {
+      const mm = String(sat.getMonth()+1).padStart(2,'0');
+      const dd = String(sat.getDate()).padStart(2,'0');
+      const yy = String(sat.getFullYear()).slice(-2);
+      targetSheet = `WE ${mm}-${dd}-${yy}`;
+    }
+  }
+
+  if (targetSheet && state.ourSheets.includes(targetSheet)) {
+    sel.value = targetSheet;
+    state.ourSheet = targetSheet;
+    notice.textContent = `Auto-selected: ${targetSheet}`;
+    notice.style.color = 'var(--green)';
+  } else if (targetSheet) {
+    notice.textContent = `Expected "${targetSheet}" — not found, please select manually`;
+    notice.style.color = 'var(--yellow)';
+    state.ourSheet = state.ourSheets[0];
+  } else {
+    notice.textContent = 'Select the week-ending tab to compare';
+    notice.style.color = 'var(--muted)';
+    state.ourSheet = state.ourSheets[0];
+  }
+
+  sp.classList.add('show');
+  sel.value = state.ourSheet;
+}
+
+function onSheetPick() {
+  state.ourSheet = document.getElementById('sheet-select').value;
+}
+
+function detectVendorSaturday(wb) {
+  const sheet = wb.Sheets[wb.SheetNames[0]];
+  const rows  = XLSX.utils.sheet_to_json(sheet, {header:1, defval:null, raw:false});
+  let fromDate = null, toDate = null;
+  for (const row of rows.slice(0, 15)) {
+    for (let j = 0; j < row.length; j++) {
+      const v = String(row[j] || '').toLowerCase();
+      if (v.includes('from date') && row[j+1]) {
+        const d = parseDate(row[j+1]); if (d) fromDate = d;
+      }
+      if (v.includes('to date') && row[j+1]) {
+        const d = parseDate(row[j+1]); if (d) toDate = d;
+      }
+    }
+    if (fromDate && toDate) break;
+  }
+  if (toDate) { const d = new Date(toDate); d.setDate(d.getDate()-1); return d; }
+  if (fromDate) { const d = new Date(fromDate); d.setDate(d.getDate()+5); return d; }
+  return null;
+}
+
+function parseDate(val) {
+  if (!val) return null;
+  const s = String(val);
+  const d = new Date(s);
+  return isNaN(d) ? null : d;
+}
+
+// Ready check
+function checkReady() {
+  const ready = state.ourWB && state.vendorWB && state.ourSheet;
+  document.getElementById('btnRun').disabled = !ready;
+  document.getElementById('runHint').textContent = ready
+    ? 'Files ready — click Run Comparison'
+    : (!state.ourWB ? 'Upload Commission Source Report' :
+       !state.vendorWB ? 'Upload Vendor Invoice' : 'Select a week tab');
+}
+
+// Core comparison logic
+function cleanInvoice(val) {
+  if (val == null) return '';
+  let s = String(val).trim().replace(/\.0+$/, '').replace(/^0+/, '') || '0';
+  return s.toUpperCase();
+}
+
+function cleanAmount(val) {
+  if (val == null) return 0;
+  const s = String(val).replace(/[^\d.\-]/g, '');
+  return parseFloat(s) || 0;
+}
+
+function sheetToRows(wb, sheetName) {
+  const ws = wb.Sheets[sheetName];
+  return XLSX.utils.sheet_to_json(ws, {header:1, defval:null, raw:false});
+}
+
+function findHeaderRow(rows, kws, minCells) {
+  for (let i = 0; i < Math.min(rows.length, 40); i++) {
+    const cells = rows[i].filter(v => v != null && String(v).trim() !== '');
+    const lower = cells.map(v => String(v).toLowerCase());
+    if (cells.length >= minCells && kws.some(kw => lower.some(c => c.includes(kw)))) return i;
+  }
+  return null;
+}
+
+function loadOurFile() {
+  const rows = sheetToRows(state.ourWB, state.ourSheet);
+  if (!rows.length) throw new Error('No data found in sheet: ' + state.ourSheet);
+
+  const headers = rows[0].map(h => String(h || ''));
+  const extIdx  = headers.indexOf('External Document No_');
+  const docIdx  = headers.indexOf('Document No_');
+  const amtIdx  = headers.findIndex(h => h === 'Amount-');
+
+  if (docIdx < 0 && extIdx < 0) throw new Error("Cannot find 'Document No_' or 'External Document No_' in " + state.ourSheet);
+  if (amtIdx < 0) throw new Error("Cannot find 'Amount-' column in " + state.ourSheet);
+
+  const agg = new Map();
+
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i];
+    const ext = extIdx >= 0 ? cleanInvoice(row[extIdx]) : '';
+    const doc = docIdx >= 0 ? cleanInvoice(row[docIdx]) : '';
+    const key = (ext && !INVALID_INV.has(ext)) ? ext : doc;
+    if (!key || INVALID_INV.has(key)) continue;
+
+    const amt = cleanAmount(row[amtIdx]);
+    if (!agg.has(key)) agg.set(key, {sales:0, returns:0});
+    const rec = agg.get(key);
+    if (amt >= 0) rec.sales   += amt;
+    else          rec.returns += Math.abs(amt);
+  }
+
+  const result = [];
+  for (const [inv, v] of agg) {
+    result.push({
+      Invoice:      inv,
+      Sales_Our:    +v.sales.toFixed(2),
+      Returns_Our:  +v.returns.toFixed(2),
+      Net_Our:      +(v.sales - v.returns).toFixed(2)
+    });
+  }
+  return result;
+}
+
+function loadVendorFile() {
+  const rows = sheetToRows(state.vendorWB, state.vendorWB.SheetNames[0]);
+
+  const SPECIFIC = ['invoice #','inv #','inv#','invoice no','invoice number'];
+  const hdrIdx   = findHeaderRow(rows, SPECIFIC, 4);
+  if (hdrIdx == null) throw new Error('Cannot find header row in vendor file');
+
+  const headers     = rows[hdrIdx].map(h => String(h || ''));
+  const invIdx      = headers.findIndex(h => ['invoice #','inv #','inv#','invoice no','invoice number'].some(kw => h.toLowerCase().includes(kw)));
+  const salesIdx    = headers.findIndex(h => h.toLowerCase().includes('sales'));
+  const returnsIdx  = headers.findIndex(h => ['returns','return'].some(kw => h.toLowerCase().includes(kw)));
+  const netIdx      = headers.findIndex(h => h.toLowerCase() === 'net');
+
+  if (invIdx < 0) throw new Error('Cannot find invoice column in vendor file. Columns: ' + headers.join(', '));
+  if (salesIdx < 0) throw new Error('Cannot find sales/amount column in vendor file');
+
+  const result = [];
+  for (let i = hdrIdx + 1; i < rows.length; i++) {
+    const row = rows[i];
+    const inv = cleanInvoice(row[invIdx]);
+    if (!inv || INVALID_INV.has(inv)) continue;
+
+    const sales   = cleanAmount(row[salesIdx]);
+    const returns = returnsIdx >= 0 ? Math.abs(cleanAmount(row[returnsIdx])) : 0;
+    const net     = netIdx >= 0 ? cleanAmount(row[netIdx]) : sales - returns;
+
+    if (sales === 0 && returns === 0 && net === 0) continue;
+
+    result.push({
+      Invoice:          inv,
+      Sales_Vendor:     +sales.toFixed(2),
+      Returns_Vendor:   +returns.toFixed(2),
+      Net_Vendor:       +net.toFixed(2)
+    });
+  }
+  return result;
+}
+
+function mergeResults(ourRows, vendorRows) {
+  const ourMap    = new Map(ourRows.map(r    => [r.Invoice, r]));
+  const vendorMap = new Map(vendorRows.map(r => [r.Invoice, r]));
+  const allKeys   = new Set([...ourMap.keys(), ...vendorMap.keys()]);
+  const merged    = [];
+
+  for (const inv of allKeys) {
+    const o = ourMap.get(inv);
+    const v = vendorMap.get(inv);
+
+    let status;
+    if (o && !v) status = 'Missing from Vendor Invoice';
+    else if (!o && v) status = 'Missing from Our Records';
+    else if (Math.abs((o.Net_Our||0) - (v.Net_Vendor||0)) > TOLERANCE) status = 'Mismatch';
+    else status = 'Match';
+
+    merged.push({
+      Invoice:          inv,
+      Sales_Our:        o ? o.Sales_Our    : 0,
+      Returns_Our:      o ? o.Returns_Our  : 0,
+      Net_Our:          o ? o.Net_Our      : 0,
+      Sales_Vendor:     v ? v.Sales_Vendor   : 0,
+      Returns_Vendor:   v ? v.Returns_Vendor : 0,
+      Net_Vendor:       v ? v.Net_Vendor     : 0,
+      Status: status
+    });
+  }
+  return merged;
+}
+
+// Run
+async function runComparison() {
+  clearError();
+  setProgress(10);
+  document.getElementById('btnRun').disabled = true;
+  document.getElementById('progressBar').classList.add('show');
+
+  await sleep(30);
+  try {
+    setProgress(30);
+    const ourRows    = loadOurFile();
+    setProgress(55);
+    const vendorRows = loadVendorFile();
+    setProgress(75);
+    const merged     = mergeResults(ourRows, vendorRows);
+    setProgress(95);
+    state.results = merged;
+    await sleep(200);
+    setProgress(100);
+    await sleep(300);
+    showResults(merged);
+  } catch(err) {
+    showError(err.message);
+    document.getElementById('btnRun').disabled = false;
+    document.getElementById('progressBar').classList.remove('show');
+    setProgress(0);
+  }
+}
+
+function showResults(merged) {
+  document.getElementById('progressBar').classList.remove('show');
+  document.getElementById('resultsSection').classList.add('show');
+
+  const counts = {Match:0,Mismatch:0,'Missing from Vendor Invoice':0,'Missing from Our Records':0};
+  for (const r of merged) counts[r.Status]++;
+
+  document.getElementById('s-match').textContent    = counts['Match'];
+  document.getElementById('s-mismatch').textContent = counts['Mismatch'];
+  document.getElementById('s-mv').textContent       = counts['Missing from Vendor Invoice'];
+  document.getElementById('s-ar').textContent       = counts['Missing from Our Records'];
+
+  document.getElementById('resultTitle').textContent = 'Comparison Complete — ' + state.ourSheet;
+  document.getElementById('resultMeta').textContent  =
+    state.ourFileName + ' · ' + state.vendorFileName + ' · ' + merged.length + ' total invoices';
+
+  const mv = merged.filter(r => r.Status === 'Missing from Vendor Invoice');
+  if (mv.length) {
+    document.getElementById('sec-mv').style.display = '';
+    document.getElementById('cnt-mv').textContent = mv.length;
+    document.getElementById('tbl-mv').innerHTML = mv.map(r =>
+      `<tr><td>${r.Invoice}</td><td class="amt ${amtClass(r.Net_Our)}">${fmt(r.Net_Our)}</td><td style="color:var(--muted);font-size:11px">In our records — not on vendor invoice</td></tr>`
+    ).join('');
+  }
+
+  const ar = merged.filter(r => r.Status === 'Missing from Our Records');
+  if (ar.length) {
+    document.getElementById('sec-ar').style.display = '';
+    document.getElementById('cnt-ar').textContent = ar.length;
+    document.getElementById('tbl-ar').innerHTML = ar.map(r =>
+      `<tr><td>${r.Invoice}</td><td class="amt ${amtClass(r.Net_Vendor)}">${fmt(r.Net_Vendor)}</td><td style="color:var(--muted);font-size:11px">On vendor invoice — not in our records</td></tr>`
+    ).join('');
+  }
+
+  const mm = merged.filter(r => r.Status === 'Mismatch');
+  if (mm.length) {
+    document.getElementById('sec-mm').style.display = '';
+    document.getElementById('cnt-mm').textContent = mm.length;
+    document.getElementById('tbl-mm').innerHTML = mm.map(r => {
+      const diff = +(r.Net_Our - r.Net_Vendor).toFixed(2);
+      return `<tr>
+        <td>${r.Invoice}</td>
+        <td class="amt">${fmt(r.Sales_Our)}</td><td class="amt">${fmt(r.Sales_Vendor)}</td>
+        <td class="amt">${fmt(r.Returns_Our)}</td><td class="amt">${fmt(r.Returns_Vendor)}</td>
+        <td class="amt">${fmt(r.Net_Our)}</td><td class="amt">${fmt(r.Net_Vendor)}</td>
+        <td class="amt ${diff>0?'amt-pos':'amt-neg'}">${diff>0?'+':''}${fmt(diff)}</td>
+      </tr>`;
+    }).join('');
+  }
+}
+
+function fmt(n) { return '$'+(+n||0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,','); }
+function amtClass(n) { return n>0?'amt-pos':n<0?'amt-neg':'amt-zero'; }
+
+// Excel output
+function downloadExcel() {
+  const merged = state.results;
+  if (!merged) return;
+
+  const wb = XLSX.utils.book_new();
+  const today = new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
+
+  const counts = {
+    Match:                        merged.filter(r=>r.Status==='Match').length,
+    Mismatch:                     merged.filter(r=>r.Status==='Mismatch').length,
+    'Missing from Vendor Invoice': merged.filter(r=>r.Status==='Missing from Vendor Invoice').length,
+    'Missing from Our Records':   merged.filter(r=>r.Status==='Missing from Our Records').length,
+  };
+
+  const sumData = [
+    ['Invoice Comparison Report','',''],
+    [''],
+    ['Commission Source Report:', state.ourFileName,''],
+    ['Tab Used:', state.ourSheet,''],
+    ['Vendor Invoice:', state.vendorFileName,''],
+    ['Report Date:', today,''],
+    [''],
+    ['Status','Count',''],
+    ['Match',              counts['Match'],''],
+    ['Mismatch',           counts['Mismatch'],''],
+    ['Missing from Vendor Invoice',counts['Missing from Vendor Invoice'],''],
+    ['Missing from Our Records',  counts['Missing from Our Records'],''],
+    [''],
+    ['Total Invoices', merged.length,''],
+  ];
+  const wsSummary = XLSX.utils.aoa_to_sheet(sumData);
+  wsSummary['!cols'] = [{wch:32},{wch:14},{wch:14}];
+  XLSX.utils.book_append_sheet(wb, wsSummary, 'Summary');
+
+  const allData = [
+    ['Invoice','Sales (Ours)','Returns (Ours)','Net (Ours)','Sales (Vendor)','Returns (Vendor)','Net (Vendor)','Status']
+  ];
+  for (const r of merged) {
+    allData.push([r.Invoice, r.Sales_Our, r.Returns_Our, r.Net_Our, r.Sales_Vendor, r.Returns_Vendor, r.Net_Vendor, r.Status]);
+  }
+  const wsAll = XLSX.utils.aoa_to_sheet(allData);
+  wsAll['!cols'] = [{wch:16},{wch:14},{wch:15},{wch:12},{wch:15},{wch:16},{wch:13},{wch:26}];
+  XLSX.utils.book_append_sheet(wb, wsAll, 'All Results');
+
+  const mv = merged.filter(r=>r.Status==='Missing from Vendor Invoice');
+  const ar = merged.filter(r=>r.Status==='Missing from Our Records');
+  const misData = [
+    ['Missing Invoices — Reference List','','',''],
+    ['Invoices found on one side only.','','',''],
+    [''],
+    ['MISSING FROM VENDOR INVOICE','','',''],
+    ['Invoice','Net (Our Records)','Source','Note'],
+  ];
+  if (!mv.length) misData.push(['No missing invoices','','','']);
+  else mv.forEach(r => misData.push([r.Invoice, r.Net_Our, 'Commission Source Report', 'In our records — not found on vendor invoice']));
+  misData.push(['']);
+  misData.push(['MISSING FROM OUR RECORDS','','','']);
+  misData.push(['Invoice','Net (Vendor)','Source','Note']);
+  if (!ar.length) misData.push(['No missing invoices','','','']);
+  else ar.forEach(r => misData.push([r.Invoice, r.Net_Vendor, 'Vendor Invoice', 'On vendor invoice — not in our records']));
+  misData.push(['']);
+  misData.push([`Total missing from vendor: ${mv.length}  |  Total missing from our records: ${ar.length}`,'','','']);
+
+  const wsMis = XLSX.utils.aoa_to_sheet(misData);
+  wsMis['!cols'] = [{wch:20},{wch:18},{wch:28},{wch:52}];
+  XLSX.utils.book_append_sheet(wb, wsMis, 'Missing Invoices');
+
+  const mmData = [
+    ['Invoice','Sales (Ours)','Returns (Ours)','Net (Ours)','Sales (Vendor)','Returns (Vendor)','Net (Vendor)','Difference','Status']
+  ];
+  merged.filter(r=>r.Status==='Mismatch').forEach(r => {
+    const diff = +(r.Net_Our - r.Net_Vendor).toFixed(2);
+    mmData.push([r.Invoice, r.Sales_Our, r.Returns_Our, r.Net_Our, r.Sales_Vendor, r.Returns_Vendor, r.Net_Vendor, diff, r.Status]);
+  });
+  const wsMM = XLSX.utils.aoa_to_sheet(mmData);
+  wsMM['!cols'] = [{wch:16},{wch:14},{wch:15},{wch:12},{wch:15},{wch:16},{wch:13},{wch:13},{wch:12}];
+  XLSX.utils.book_append_sheet(wb, wsMM, 'Mismatches');
+
+  const matchData = [['Invoice','Sales (Ours)','Returns (Ours)','Net (Ours)','Sales (Vendor)','Returns (Vendor)','Net (Vendor)','Status']];
+  merged.filter(r=>r.Status==='Match').forEach(r => {
+    matchData.push([r.Invoice, r.Sales_Our, r.Returns_Our, r.Net_Our, r.Sales_Vendor, r.Returns_Vendor, r.Net_Vendor, r.Status]);
+  });
+  const wsMatch = XLSX.utils.aoa_to_sheet(matchData);
+  wsMatch['!cols'] = [{wch:16},{wch:14},{wch:15},{wch:12},{wch:15},{wch:16},{wch:13},{wch:12}];
+  XLSX.utils.book_append_sheet(wb, wsMatch, 'Matched');
+
+  const vendorBase = state.vendorFileName.replace(/\.[^.]+$/,'');
+  const filename   = `comparison_${vendorBase}_${state.ourSheet.replace(/\s/g,'_')}.xlsx`;
+  XLSX.writeFile(wb, filename);
+}
+
+// Helpers
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+function setProgress(pct) { document.getElementById('progressFill').style.width = pct+'%'; }
+function showError(msg) {
+  const el = document.getElementById('errorBox');
+  el.textContent = 'Error: ' + msg;
+  el.classList.add('show');
+}
+function clearError() { document.getElementById('errorBox').classList.remove('show'); }
+
+function resetApp() {
+  state.ourWB = null; state.ourFileName = ''; state.ourSheets = []; state.ourSheet = '';
+  state.vendorWB = null; state.vendorFileName = ''; state.results = null;
+  ['our','vendor'].forEach(s => clearFile(s));
+  document.getElementById('resultsSection').classList.remove('show');
+  document.getElementById('progressBar').classList.remove('show');
+  document.getElementById('sp-our').classList.remove('show');
+  ['sec-mv','sec-ar','sec-mm'].forEach(id => document.getElementById(id).style.display='none');
+  ['tbl-mv','tbl-ar','tbl-mm'].forEach(id => document.getElementById(id).innerHTML='');
+  setProgress(0);
+  clearError();
+  checkReady();
+}
+</script>
+</body>
+</html>
