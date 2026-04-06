@@ -175,7 +175,7 @@ tbody tr:hover{background:rgba(255,255,255,.02)}
 
       <!-- Vendor invoices -->
       <div>
-        <div class="ctitle" id="lbl-ven"><span class="dot"></span>Vendor Invoices
+        <div class="ctitle" id="lbl-ven"><span class="dot"></span>Distributor Invoices
           <span style="margin-left:auto;font-size:10px;color:var(--m2)">multiple files OK</span>
         </div>
         <div class="dz" id="dz-ven"
@@ -183,7 +183,7 @@ tbody tr:hover{background:rgba(255,255,255,.02)}
           <input type="file" accept=".xlsx,.xls" multiple onchange="loadVendors(event)">
           <span class="dz-icon">🧾</span>
           <div class="dz-main">Drop files or click to browse</div>
-          <div class="dz-sub">Multiple vendor files · different formats · auto-detected</div>
+          <div class="dz-sub">Multiple distributor files · different formats · auto-detected</div>
         </div>
         <div class="chips" id="chips-ven"></div>
       </div>
@@ -191,7 +191,7 @@ tbody tr:hover{background:rgba(255,255,255,.02)}
 
     <div class="btn-row">
       <button class="btn bp" id="btnNext1" onclick="goStep2()" disabled>Next → Verify Detection</button>
-      <span style="font-size:12px;color:var(--muted)" id="hint1">Upload source report and at least one vendor file</span>
+      <span style="font-size:12px;color:var(--muted)" id="hint1">Upload source report and at least one distributor file</span>
     </div>
   </div>
 
@@ -220,14 +220,18 @@ tbody tr:hover{background:rgba(255,255,255,.02)}
           <div class="vdet-label">AMOUNT (sales excl. delivery) <span class="req">required</span></div>
           <div class="sw"><select id="src-amt"></select></div>
         </div>
+        <div class="vdet-field">
+          <div class="vdet-label">DELIVERY FEES COLUMN <span class="opt">optional</span></div>
+          <div class="sw"><select id="src-del"></select></div>
+        </div>
       </div>
     </div>
 
     <div class="card">
-      <div class="ctitle go"><span class="dot"></span>Vendor Invoices — Auto-Detected Columns</div>
+      <div class="ctitle go"><span class="dot"></span>Distributor Invoices — Auto-Detected Columns</div>
       <div class="info">
         <span>🔍</span>
-        <div>Each vendor file is scanned to find its <b>Invoice #</b>, <b>Date</b>, and <b>Net amount</b> columns. Review and correct if needed — vendor formats vary.</div>
+        <div>Each distributor file is scanned to find its <b>Invoice #</b>, <b>Date</b>, and <b>Net amount</b> columns. Review and correct if needed — distributor formats vary.</div>
       </div>
       <div class="vdet-grid" id="vdet-grid"></div>
     </div>
@@ -269,11 +273,27 @@ tbody tr:hover{background:rgba(255,255,255,.02)}
       <div class="sg">
         <div class="st cg"><div class="sn2" id="s-m">0</div><div class="sl2">Matched</div></div>
         <div class="st cy"><div class="sn2" id="s-mm">0</div><div class="sl2">Amount Mismatch</div></div>
-        <div class="st co"><div class="sn2" id="s-mv">0</div><div class="sl2">Missing from Vendor</div></div>
+        <div class="st co"><div class="sn2" id="s-mv">0</div><div class="sl2">Missing from Distributor</div></div>
         <div class="st cr"><div class="sn2" id="s-ar">0</div><div class="sl2">Missing from Source</div></div>
       </div>
 
-      <!-- Vendor tabs -->
+      <!-- Source report totals -->
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px" id="src-totals-row">
+        <div style="background:var(--s2);border:1px solid var(--border);border-radius:var(--r);padding:10px 13px">
+          <div style="font-size:9px;font-family:var(--mono);letter-spacing:.5px;color:var(--muted);margin-bottom:3px">SOURCE REPORT TOTAL SALES</div>
+          <div style="font-family:var(--mono);font-size:16px;font-weight:600;color:var(--text)" id="src-total-sales">$0.00</div>
+        </div>
+        <div style="background:var(--s2);border:1px solid var(--border);border-radius:var(--r);padding:10px 13px">
+          <div style="font-size:9px;font-family:var(--mono);letter-spacing:.5px;color:var(--muted);margin-bottom:3px">SOURCE REPORT RETURNS</div>
+          <div style="font-family:var(--mono);font-size:16px;font-weight:600;color:var(--red)" id="src-total-returns">$0.00</div>
+        </div>
+        <div style="background:var(--s2);border:1px solid var(--border);border-radius:var(--r);padding:10px 13px">
+          <div style="font-size:9px;font-family:var(--mono);letter-spacing:.5px;color:var(--muted);margin-bottom:3px">SOURCE REPORT DELIVERY FEES</div>
+          <div style="font-family:var(--mono);font-size:16px;font-weight:600;color:var(--yellow)" id="src-total-delivery">$0.00</div>
+        </div>
+      </div>
+
+      <!-- Distributor tabs -->
       <div class="vtabs" id="vtabs"></div>
 
       <!-- Per-vendor results sections -->
@@ -298,8 +318,9 @@ tbody tr:hover{background:rgba(255,255,255,.02)}
 // ── State ──────────────────────────────────────────────────────────────
 const S = {
   srcWB: null, srcFile: '', srcSheet: '', srcHeaders: [],
-  vendors: [],   // [{file, wb, sheet, headers, detected:{inv,date,sales,returns,net}}]
-  allResults: [] // per vendor
+  vendors: [],
+  allResults: [],
+  srcTotals: {sales:0, returns:0, delivery:0}
 };
 
 const INVALID = new Set(['0','-','NAN','','NONE','N/A','NA','#N/A','null','undefined','hide','show']);
@@ -392,7 +413,7 @@ function loadSrc(e){
 
 function onSrcSheet(){ S.srcSheet=document.getElementById('ss-src').value; }
 
-// ── Load Vendor Files ──────────────────────────────────────────────────
+// ── Load Distributor Files ──────────────────────────────────────────────────
 function loadVendors(e){
   Array.from(e.target.files).forEach(file=>{
     if(S.vendors.find(v=>v.file===file.name)) return; // skip dupe
@@ -437,7 +458,7 @@ function checkReady(){
   document.getElementById('btnNext1').disabled=!ok;
   document.getElementById('hint1').textContent=ok
     ?'Ready · click Next to review detection'
-    :(!S.srcWB?'Upload Source Report':'Upload at least one vendor file');
+    :(!S.srcWB?'Upload Source Report':'Upload at least one distributor file');
 }
 
 // ── Step navigation ────────────────────────────────────────────────────
@@ -453,12 +474,13 @@ function goStep2(){
   S.srcHeaders=srcH;
 
   // Source column selects
-  ['src-inv','src-inv2','src-date','src-amt'].forEach(id=>document.getElementById(id).innerHTML='');
+  ['src-inv','src-inv2','src-date','src-amt','src-del'].forEach(id=>document.getElementById(id).innerHTML='');
   const srcConfig=[
     {id:'src-inv',  opt:false, kw:['external document','external doc']},
     {id:'src-inv2', opt:true,  kw:['document no','doc no','document']},
     {id:'src-date', opt:false, kw:['posting date','post date','date']},
     {id:'src-amt',  opt:false, kw:['sales $$ exclude','sales excl','exclude delivery','sales $$']},
+    {id:'src-del',  opt:true,  kw:['delivery-','delivery']},
   ];
   srcConfig.forEach(cfg=>{
     const sel=document.getElementById(cfg.id);
@@ -576,12 +598,13 @@ function findHdrRowIdx(rows, requiredCol){
 
 function getColIdx(hdrs, col){ return col?hdrs.indexOf(col):-1; }
 
-// ── Load source into a Map: key=(inv, dayNum) → amount ────────────────
+// ── Load source into a Map + compute totals ───────────────────────────
 function buildSourceMap(){
   const invCol   = document.getElementById('src-inv').value;
   const inv2Col  = document.getElementById('src-inv2').value;
   const dateCol  = document.getElementById('src-date').value;
   const amtCol   = document.getElementById('src-amt').value;
+  const delCol   = document.getElementById('src-del').value;
 
   if(!invCol)  throw new Error('Please select Invoice ID column for Source Report');
   if(!dateCol) throw new Error('Please select Date column for Source Report');
@@ -594,8 +617,11 @@ function buildSourceMap(){
   const hdrs=rows[hdrIdx].map(cleanH);
   const i1=getColIdx(hdrs,invCol), i2=getColIdx(hdrs,inv2Col);
   const iD=getColIdx(hdrs,dateCol), iA=getColIdx(hdrs,amtCol);
+  const iDel=getColIdx(hdrs,delCol);
 
-  // Map: invKey → [{day, amt, raw}] — keep all rows (handles returns as separate rows)
+  // Accumulate grand totals across source report
+  S.srcTotals={sales:0,returns:0,delivery:0};
+
   const map=new Map();
   for(let i=hdrIdx+1;i<rows.length;i++){
     const row=rows[i];
@@ -605,13 +631,23 @@ function buildSourceMap(){
     if(!inv||INVALID.has(inv)) continue;
     const day=parseDay(row[iD]);
     const amt=cleanAmt(row[iA]);
+    const del=iDel>=0?Math.abs(cleanAmt(row[iDel])):0;
+
+    // Classify: negative amounts are returns
+    if(amt>=0) S.srcTotals.sales+=amt;
+    else       S.srcTotals.returns+=Math.abs(amt);
+    S.srcTotals.delivery+=del;
+
     if(!map.has(inv)) map.set(inv,[]);
-    map.get(inv).push({day,amt,used:false});
+    map.get(inv).push({day,amt,del,used:false});
   }
+  S.srcTotals.sales    =+S.srcTotals.sales.toFixed(2);
+  S.srcTotals.returns  =+S.srcTotals.returns.toFixed(2);
+  S.srcTotals.delivery =+S.srcTotals.delivery.toFixed(2);
   return map;
 }
 
-// ── Compare one vendor file ────────────────────────────────────────────
+// ── Compare one distributor file ───────────────────────────────────────
 function compareVendor(v, srcMap, dayTol, amtTol){
   const invCol  = document.getElementById('vi-'+v.id).value;
   const dateCol = document.getElementById('vd-'+v.id).value;
@@ -632,6 +668,7 @@ function compareVendor(v, srcMap, dayTol, amtTol){
   const iS=getColIdx(hdrs,salCol), iR=getColIdx(hdrs,retCol), iN=getColIdx(hdrs,netCol);
 
   const matched=[], mismatch=[], missingInSrc=[];
+  const distTotals={sales:0,returns:0,net:0};
 
   for(let i=hdrIdx+1;i<rows.length;i++){
     const row=rows[i];
@@ -644,6 +681,9 @@ function compareVendor(v, srcMap, dayTol, amtTol){
     const vNet=iN>=0?cleanAmt(row[iN]):+(vSales-vRet).toFixed(2);
 
     if(vSales===0&&vRet===0&&vNet===0) continue;
+    distTotals.sales  +=vSales;
+    distTotals.returns+=vRet;
+    distTotals.net    +=vNet;
 
     // Find matching source row
     const srcRows=srcMap.get(inv)||[];
@@ -675,7 +715,7 @@ function compareVendor(v, srcMap, dayTol, amtTol){
     }
   }
 
-  // Source rows not matched by any vendor row = missing from vendor
+  // Source rows not matched by any vendor row = missing from distributor
   const missingInVen=[];
   for(const [inv,rows2] of srcMap){
     for(const sr of rows2){
@@ -683,7 +723,10 @@ function compareVendor(v, srcMap, dayTol, amtTol){
     }
   }
 
-  return {vendor:v.file,matched,mismatch,missingInSrc,missingInVen};
+  distTotals.sales  =+distTotals.sales.toFixed(2);
+  distTotals.returns=+distTotals.returns.toFixed(2);
+  distTotals.net    =+distTotals.net.toFixed(2);
+  return {vendor:v.file,matched,mismatch,missingInSrc,missingInVen,distTotals};
 }
 
 // ── Run ────────────────────────────────────────────────────────────────
@@ -738,6 +781,9 @@ function showResults(){
   document.getElementById('s-ar').textContent=tot.ar;
 
   document.getElementById('r-title').textContent='Reconciliation Complete';
+  document.getElementById('src-total-sales').textContent=fmt(S.srcTotals.sales);
+  document.getElementById('src-total-returns').textContent=fmt(S.srcTotals.returns);
+  document.getElementById('src-total-delivery').textContent=fmt(S.srcTotals.delivery);
   document.getElementById('r-meta').textContent=
     S.srcFile+' ('+S.srcSheet+') vs '+S.vendors.length+' vendor file'+(S.vendors.length>1?'s':'');
 
@@ -767,21 +813,37 @@ function showResults(){
 function buildVendorSection(r){
   let html='';
 
+  // Totals row
+  html+=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px">
+    <div style="background:var(--s2);border:1px solid var(--border);border-radius:var(--r);padding:10px 13px">
+      <div style="font-size:9px;font-family:var(--mono);letter-spacing:.5px;color:var(--muted);margin-bottom:3px">DISTRIBUTOR TOTAL SALES</div>
+      <div style="font-family:var(--mono);font-size:16px;font-weight:600;color:var(--text)">${fmt(r.distTotals.sales)}</div>
+    </div>
+    <div style="background:var(--s2);border:1px solid var(--border);border-radius:var(--r);padding:10px 13px">
+      <div style="font-size:9px;font-family:var(--mono);letter-spacing:.5px;color:var(--muted);margin-bottom:3px">DISTRIBUTOR TOTAL RETURNS</div>
+      <div style="font-family:var(--mono);font-size:16px;font-weight:600;color:var(--red)">${fmt(r.distTotals.returns)}</div>
+    </div>
+    <div style="background:var(--s2);border:1px solid var(--border);border-radius:var(--r);padding:10px 13px">
+      <div style="font-size:9px;font-family:var(--mono);letter-spacing:.5px;color:var(--muted);margin-bottom:3px">DISTRIBUTOR NET</div>
+      <div style="font-family:var(--mono);font-size:16px;font-weight:600;color:var(--green)">${fmt(r.distTotals.net)}</div>
+    </div>
+  </div>`;
+
   // Mini stats
   html+=`<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px">
     <div class="st cg" style="padding:10px 12px"><div class="sn2" style="font-size:18px">${r.matched.length}</div><div class="sl2">Matched</div></div>
     <div class="st cy" style="padding:10px 12px"><div class="sn2" style="font-size:18px">${r.mismatch.length}</div><div class="sl2">Mismatches</div></div>
-    <div class="st co" style="padding:10px 12px"><div class="sn2" style="font-size:18px">${r.missingInVen.length}</div><div class="sl2">Missing from Vendor</div></div>
+    <div class="st co" style="padding:10px 12px"><div class="sn2" style="font-size:18px">${r.missingInVen.length}</div><div class="sl2">Missing from Distributor</div></div>
     <div class="st cr" style="padding:10px 12px"><div class="sn2" style="font-size:18px">${r.missingInSrc.length}</div><div class="sl2">Missing from Source</div></div>
   </div>`;
 
   // Missing from vendor
   if(r.missingInVen.length){
     html+=`<div class="section">
-      <div class="sh"><span class="st2" style="color:var(--orange)">Missing from Vendor Invoice</span>
+      <div class="sh"><span class="st2" style="color:var(--orange)">Missing from Distributor Invoice</span>
         <span class="sb" style="background:rgba(249,115,22,.12);color:var(--orange)">${r.missingInVen.length}</span></div>
       <div class="tw"><table><thead><tr><th>Invoice</th><th class="ar">Source Amount</th><th>Note</th></tr></thead><tbody>
-      ${r.missingInVen.map(row=>`<tr><td>${row.inv}</td><td class="ar">${fmt(row.srcAmt)}</td><td style="color:var(--muted);font-size:10px">In source report — not found on vendor invoice</td></tr>`).join('')}
+      ${r.missingInVen.map(row=>`<tr><td>${row.inv}</td><td class="ar">${fmt(row.srcAmt)}</td><td style="color:var(--muted);font-size:10px">In source report — not found on distributor invoice</td></tr>`).join('')}
       </tbody></table></div></div>`;
   }
 
@@ -800,7 +862,7 @@ function buildVendorSection(r){
     html+=`<div class="section">
       <div class="sh"><span class="st2" style="color:var(--yellow)">Amount Mismatches</span>
         <span class="sb" style="background:rgba(245,158,11,.12);color:var(--yellow)">${r.mismatch.length}</span></div>
-      <div class="tw"><table><thead><tr><th>Invoice</th><th>Date</th><th class="ar">Vendor Sales</th><th class="ar">Vendor Returns</th><th class="ar">Vendor Net</th><th class="ar">Source Amount</th><th class="ar">Diff</th></tr></thead><tbody>
+      <div class="tw"><table><thead><tr><th>Invoice</th><th>Date</th><th class="ar">Distributor Sales</th><th class="ar">Distributor Returns</th><th class="ar">Distributor Net</th><th class="ar">Source Amount</th><th class="ar">Diff</th></tr></thead><tbody>
       ${r.mismatch.map(row=>{const c=row.diff>0?'var(--green)':'var(--red)';return`<tr><td>${row.inv}</td><td>${fmtDate(row.vDate)}</td><td class="ar">${fmt(row.vSales)}</td><td class="ar">${fmt(row.vRet)}</td><td class="ar">${fmt(row.vNet)}</td><td class="ar">${fmt(row.srcAmt)}</td><td class="ar" style="color:${c}">${row.diff>0?'+':''}${fmt(row.diff)}</td></tr>`;}).join('')}
       </tbody></table></div></div>`;
   }
@@ -819,14 +881,22 @@ function downloadExcel(){
   const sumD=[['Invoice Reconciliation Report'],[''],
     ['Source Report:', S.srcFile+' — '+S.srcSheet],
     ['Report Date:', today],[''],
-    ['OVERALL','Count'],
+    ['SOURCE REPORT TOTALS',''],
+    ['Total Sales (source)', S.srcTotals.sales],
+    ['Total Returns (source, negative rows)', S.srcTotals.returns],
+    ['Total Delivery Fees (source)', S.srcTotals.delivery],
+    [''],
+    ['OVERALL MATCH RESULTS','Count'],
     ['Matched', tot.m],['Mismatches', tot.mm],
-    ['Missing from Vendor', tot.mv],['Missing from Source', tot.ar],
-    [''],['Vendor files:'],
-    ...S.allResults.map(r=>[r.vendor, `${r.matched.length} matched, ${r.mismatch.length} mismatches, ${r.missingInVen.length} missing from vendor, ${r.missingInSrc.length} missing from source`]),
+    ['Missing from Distributor Invoice', tot.mv],['Missing from Source Report', tot.ar],
+    [''],['DISTRIBUTOR FILES',''],
+    ...S.allResults.map(r=>[r.vendor,
+      `Matched: ${r.matched.length} | Mismatches: ${r.mismatch.length} | Missing from dist: ${r.missingInVen.length} | Missing from source: ${r.missingInSrc.length}`]),
+    [''],['DISTRIBUTOR TOTALS BY FILE','Sales','Returns','Net'],
+    ...S.allResults.map(r=>[r.vendor, r.distTotals.sales, r.distTotals.returns, r.distTotals.net]),
   ];
   const wsSum=XLSX.utils.aoa_to_sheet(sumD);
-  wsSum['!cols']=[{wch:30},{wch:60}];
+  wsSum['!cols']=[{wch:36},{wch:60},{wch:12},{wch:12}];
   XLSX.utils.book_append_sheet(wb,wsSum,'Summary');
 
   // Per-vendor sheets
@@ -834,11 +904,15 @@ function downloadExcel(){
     const name=r.vendor.replace(/\.[^.]+$/,'').slice(0,28);
 
     // All results
-    const allD=[['Invoice','Date','Vendor Sales','Vendor Returns','Vendor Net','Source Amount','Diff','Status']];
+    const allD=[['Invoice','Date','Distributor Sales','Distributor Returns','Distributor Net','Source Amount','Diff','Status']];
     r.matched.forEach(x=>allD.push([x.inv,fmtDate(x.vDate),x.vSales,x.vRet,x.vNet,x.srcAmt,0,'Match']));
     r.mismatch.forEach(x=>allD.push([x.inv,fmtDate(x.vDate),x.vSales,x.vRet,x.vNet,x.srcAmt,x.diff,'Mismatch']));
     r.missingInSrc.forEach(x=>allD.push([x.inv,fmtDate(x.vDate),x.vSales,x.vRet,x.vNet,0,x.vNet,'Missing from Source']));
-    r.missingInVen.forEach(x=>allD.push([x.inv,'','','','',x.srcAmt,-x.srcAmt,'Missing from Vendor']));
+    r.missingInVen.forEach(x=>allD.push([x.inv,'','','','',x.srcAmt,-x.srcAmt,'Missing from Distributor']));
+    // Totals row
+    allD.push([]);
+    allD.push(['TOTALS','','Distributor Sales','Distributor Returns','Distributor Net','','','']);
+    allD.push(['',''  , r.distTotals.sales, r.distTotals.returns, r.distTotals.net,'','','']);
     const ws=XLSX.utils.aoa_to_sheet(allD);
     ws['!cols']=[{wch:16},{wch:12},{wch:13},{wch:15},{wch:12},{wch:14},{wch:10},{wch:22}];
     XLSX.utils.book_append_sheet(wb,ws,name.slice(0,31));
@@ -848,8 +922,8 @@ function downloadExcel(){
   const misD=[['Missing Invoices — Consolidated Reference'],[''],
     ['MISSING FROM VENDOR INVOICES'],['Invoice','Source Amount','Source Report Tab','Note'],
   ];
-  S.allResults.forEach(r=>r.missingInVen.forEach(x=>misD.push([x.inv,x.srcAmt,S.srcSheet,'In source — not on any vendor invoice'])));
-  misD.push([],['MISSING FROM SOURCE REPORT'],['Invoice','Date','Vendor Net','Vendor File','Note']);
+  S.allResults.forEach(r=>r.missingInVen.forEach(x=>misD.push([x.inv,x.srcAmt,S.srcSheet,'In source — not on any distributor invoice'])));
+  misD.push([],['MISSING FROM SOURCE REPORT'],['Invoice','Date','Distributor Net','Distributor File','Note']);
   S.allResults.forEach(r=>r.missingInSrc.forEach(x=>misD.push([x.inv,fmtDate(x.vDate),x.vNet,r.vendor,'On vendor invoice — not in source report'])));
   const wsMis=XLSX.utils.aoa_to_sheet(misD);
   wsMis['!cols']=[{wch:18},{wch:14},{wch:20},{wch:32},{wch:48}];
